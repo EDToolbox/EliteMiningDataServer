@@ -1,23 +1,44 @@
-# Dockerfile für Elite Mining Data Server
-FROM node:lts-alpine
+# Multi-stage Dockerfile für Elite Mining Data Server
+
+# Build stage
+FROM node:lts-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev dependencies)
+RUN npm ci
+
+# Copy source code
+COPY src/ ./src/
+
+# Production stage
+FROM node:lts-alpine AS production
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
 
 # Set working directory
 WORKDIR /app
 
 # Create app user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S eliteuser -u 1001
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S eliteuser -u 1001
 
-# Install dependencies first (for better caching)
+# Copy package files
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+
+# Install only production dependencies
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Create necessary directories
 RUN mkdir -p logs data && \
     chown -R eliteuser:nodejs /app
 
-# Copy source code
-COPY --chown=eliteuser:nodejs src/ ./src/
+# Copy source code from builder stage
+COPY --from=builder --chown=eliteuser:nodejs /app/src/ ./src/
 
 # Switch to non-root user
 USER eliteuser
@@ -28,6 +49,9 @@ EXPOSE 3000
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
 
 # Start application
 CMD ["node", "src/index.js"]

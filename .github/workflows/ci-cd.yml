@@ -9,7 +9,7 @@ on:
 
 env:
   NODE_VERSION: '22.x'
-  MONGODB_VERSION: '7.0'
+  MONGODB_VERSION: '8.0'
 
 jobs:
   test:
@@ -18,18 +18,18 @@ jobs:
     
     services:
       mongodb:
-        image: mongo:7.0
+        image: mongo:8.0
         env:
           MONGO_INITDB_ROOT_USERNAME: testuser
           MONGO_INITDB_ROOT_PASSWORD: testpass123
         ports:
           - 27017:27017
         options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\")' admin"
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})' --authenticationDatabase admin --username testuser --password testpass123"
           --health-interval 10s
           --health-timeout 10s
-          --health-retries 10
-          --health-start-period 20s
+          --health-retries 15
+          --health-start-period 40s
 
     strategy:
       matrix:
@@ -68,10 +68,18 @@ jobs:
 
     - name: Wait for MongoDB
       run: |
-        until mongosh --host localhost:27017 -u testuser -p testpass123 --authenticationDatabase admin --eval "print('MongoDB is ready')"; do
-          echo "Waiting for MongoDB..."
-          sleep 2
+        echo "Waiting for MongoDB to be ready..."
+        for i in {1..30}; do
+          if mongosh --host localhost:27017 --username testuser --password testpass123 --authenticationDatabase admin --eval "db.runCommand({ping:1})" --quiet; then
+            echo "✅ MongoDB is ready!"
+            break
+          fi
+          echo "⏳ Attempt $i/30: MongoDB not ready yet, waiting..."
+          sleep 5
         done
+        
+        # Final verification
+        mongosh --host localhost:27017 --username testuser --password testpass123 --authenticationDatabase admin --eval "print('MongoDB connection verified: ' + JSON.stringify(db.runCommand({ping:1})))"
 
     - name: Run unit tests
       env:

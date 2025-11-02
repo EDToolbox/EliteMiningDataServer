@@ -1,0 +1,21 @@
+{
+  "ignorePatterns": [
+    {
+      "pattern": "node_modules"
+    },
+    {
+      "pattern": ".git"
+    },
+    {
+      "pattern": "coverage"
+    },
+    {
+      "pattern": "dist"
+    }
+  ],
+  "httpStatusCodes": [200, 301, 302, 403, 404],
+  "timeout": "30s",
+  "retryOn429": true,
+  "retryCount": 3,
+  "fallbackHttpStatus": [200, 301, 302]
+}

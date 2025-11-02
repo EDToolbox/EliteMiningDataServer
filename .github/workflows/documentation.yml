@@ -1,0 +1,470 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - '.github/workflows/documentation.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  validate-docs:
+    name: Validate Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install markdownlint
+      run: npm install -g markdownlint-cli
+
+    - name: Lint Markdown files
+      run: |
+        markdownlint . --ignore node_modules --ignore .git
+
+    - name: Check for broken links
+      uses: gaurav-nelson/github-action-markdown-link-check@v1
+      with:
+        use-quiet-mode: 'yes'
+        use-verbose-mode: 'yes'
+        config-file: '.github/workflows/markdown-link-check-config.json'
+        folder-path: '.'
+        file-path: './README.md'
+
+    - name: Validate README structure
+      run: |
+        echo "🔍 Validating README.md structure..."
+        
+        REQUIRED_SECTIONS=(
+          "# Elite Mining Data Server"
+          "## Features"
+          "## Prerequisites"
+          "## Installation"
+          "## Configuration" 
+          "## Usage"
+          "## API Documentation"
+          "## Docker Deployment"
+          "## Security"
+          "## Monitoring"
+          "## Contributing"
+          "## License"
+        )
+        
+        MISSING_SECTIONS=()
+        
+        for section in "${REQUIRED_SECTIONS[@]}"; do
+          if ! grep -q "$section" README.md; then
+            MISSING_SECTIONS+=("$section")
+          fi
+        done
+        
+        if [ ${#MISSING_SECTIONS[@]} -gt 0 ]; then
+          echo "❌ Missing required sections in README.md:"
+          printf '  - %s\n' "${MISSING_SECTIONS[@]}"
+          exit 1
+        else
+          echo "✅ All required sections are present in README.md"
+        fi
+
+    - name: Check documentation completeness
+      run: |
+        echo "📚 Checking documentation completeness..."
+        
+        # Check if all configuration files are documented
+        CONFIGS=(
+          "compose.yaml"
+          "docker-compose.prod.yml"
+          "traefik/traefik.yml"
+          "crowdsec/acquis.yaml"
+          ".env.example"
+        )
+        
+        for config in "${CONFIGS[@]}"; do
+          if [ -f "$config" ] && ! grep -q "$config" README.md; then
+            echo "⚠️ Configuration file $config is not documented in README.md"
+          fi
+        done
+        
+        # Check if all scripts are documented
+        if [ -f "package.json" ]; then
+          SCRIPTS=$(npm run | grep -E '^  [a-z]' | awk '{print $1}' | head -10)
+          for script in $SCRIPTS; do
+            if ! grep -q "$script" README.md; then
+              echo "⚠️ Script '$script' is not documented in README.md"
+            fi
+          done
+        fi
+
+  spell-check:
+    name: Spell Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install cspell
+      run: npm install -g cspell
+
+    - name: Create cspell configuration
+      run: |
+        cat > cspell.json << 'EOF'
+        {
+          "version": "0.2",
+          "language": "en",
+          "files": [
+            "**/*.md",
+            "**/*.txt"
+          ],
+          "ignorePaths": [
+            "node_modules/**",
+            ".git/**",
+            "coverage/**",
+            "dist/**"
+          ],
+          "words": [
+            "EDDN",
+            "EDSM",
+            "Inara",
+            "MongoDB",
+            "Redis",
+            "Traefik",
+            "CrowdSec",
+            "Node.js",
+            "Docker",
+            "WebSocket",
+            "API",
+            "JSON",
+            "YAML",
+            "SSL",
+            "TLS",
+            "JWT",
+            "OAuth",
+            "UUID",
+            "Elite",
+            "Dangerous",
+            "nodejs",
+            "websocket",
+            "mongo",
+            "redis",
+            "crowdsec",
+            "traefik",
+            "dockerfile",
+            "kubernetes",
+            "nginx",
+            "localhost",
+            "webhook",
+            "middleware",
+            "cors",
+            "gzip",
+            "minify",
+            "env",
+            "vars",
+            "config",
+            "deps",
+            "dev",
+            "prod",
+            "dist",
+            "src",
+            "app",
+            "auth",
+            "admin",
+            "backend",
+            "frontend",
+            "dashboard",
+            "monitoring",
+            "logging",
+            "metrics",
+            "prometheus",
+            "grafana",
+            "elasticsearch",
+            "kibana",
+            "logstash"
+          ]
+        }
+        EOF
+
+    - name: Run spell check
+      run: |
+        cspell "**/*.md" --config cspell.json
+
+  generate-docs:
+    name: Generate Documentation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Generate API documentation
+      run: |
+        mkdir -p docs/api
+        
+        # Generate JSDoc documentation if available
+        if command -v jsdoc &> /dev/null; then
+          jsdoc -r . -d docs/api --exclude node_modules
+        fi
+        
+        # Create API endpoint documentation
+        cat > docs/api/endpoints.md << 'EOF'
+        # API Endpoints Documentation
+        
+        ## Health Check
+        
+        ### GET /health
+        Returns the health status of the server.
+        
+        **Response:**
+        ```json
+        {
+          "status": "healthy",
+          "timestamp": "2024-01-01T00:00:00.000Z",
+          "uptime": 12345,
+          "memory": {
+            "used": 123456789,
+            "total": 987654321
+          },
+          "database": "connected",
+          "redis": "connected"
+        }
+        ```
+        
+        ## Dashboard API
+        
+        ### GET /dashboard
+        Returns the main dashboard interface.
+        
+        ### GET /api/dashboard/stats
+        Returns real-time statistics.
+        
+        **Response:**
+        ```json
+        {
+          "connections": {
+            "eddn": "connected",
+            "inara": "connected", 
+            "edsm": "connected"
+          },
+          "data": {
+            "totalSystems": 12345,
+            "totalStations": 67890,
+            "lastUpdate": "2024-01-01T00:00:00.000Z"
+          },
+          "performance": {
+            "memoryUsage": 123456789,
+            "cpuUsage": 45.6,
+            "uptime": 12345
+          }
+        }
+        ```
+        
+        ### WebSocket /ws
+        Real-time updates via WebSocket connection.
+        
+        **Messages:**
+        - `stats`: Real-time statistics updates
+        - `security`: Security event notifications
+        - `data`: New mining data updates
+        EOF
+
+    - name: Generate deployment guide
+      run: |
+        mkdir -p docs/deployment
+        
+        cat > docs/deployment/production.md << 'EOF'
+        # Production Deployment Guide
+        
+        ## Prerequisites
+        
+        - Docker Engine 24.0+
+        - Docker Compose 2.20+
+        - 4GB+ RAM
+        - 20GB+ disk space
+        - Domain name with DNS access
+        
+        ## Quick Production Setup
+        
+        1. **Clone and configure:**
+        ```bash
+        git clone https://github.com/your-username/elite-mining-data-server.git
+        cd elite-mining-data-server
+        cp .env.example .env
+        ```
+        
+        2. **Configure environment:**
+        ```bash
+        # Edit .env with production values
+        nano .env
+        ```
+        
+        3. **Deploy with Docker Compose:**
+        ```bash
+        docker compose -f docker-compose.prod.yml up -d
+        ```
+        
+        4. **Verify deployment:**
+        ```bash
+        curl https://your-domain.com/health
+        ```
+        
+        ## Security Checklist
+        
+        - [ ] SSL certificates configured
+        - [ ] Firewall rules applied
+        - [ ] Database authentication enabled
+        - [ ] CrowdSec security engine active
+        - [ ] Admin dashboard secured
+        - [ ] Backup strategy implemented
+        - [ ] Monitoring alerts configured
+        
+        ## Monitoring
+        
+        Access monitoring endpoints:
+        - **Dashboard**: https://your-domain.com/dashboard
+        - **Health**: https://your-domain.com/health
+        - **Metrics**: https://your-domain.com/metrics
+        - **Traefik**: https://traefik.your-domain.com
+        
+        ## Troubleshooting
+        
+        **Check logs:**
+        ```bash
+        docker compose logs -f elite-mining-server
+        docker compose logs -f traefik
+        docker compose logs -f crowdsec
+        ```
+        
+        **Common issues:**
+        - Port conflicts: Check if ports 80/443 are available
+        - DNS issues: Verify domain DNS configuration
+        - SSL issues: Check Traefik certificate resolver
+        - Database issues: Verify MongoDB connection string
+        EOF
+
+    - name: Generate architecture documentation
+      run: |
+        cat > docs/ARCHITECTURE.md << 'EOF'
+        # System Architecture
+        
+        ## Overview
+        
+        The Elite Mining Data Server is a containerized Node.js application that aggregates mining data from multiple Elite Dangerous APIs.
+        
+        ## Components
+        
+        ### Core Application
+        - **Node.js Server**: Express.js with WebSocket support
+        - **Database**: MongoDB 8.0 for data persistence
+        - **Cache**: Redis for high-performance caching
+        - **Real-time Updates**: WebSocket for live dashboard updates
+        
+        ### Infrastructure
+        - **Reverse Proxy**: Traefik with automatic SSL
+        - **Security**: CrowdSec for threat detection and blocking
+        - **Containerization**: Docker with multi-stage builds
+        - **Orchestration**: Docker Compose for service management
+        
+        ### Data Sources
+        - **EDDN**: Elite Dangerous Data Network
+        - **Inara**: Community database and tools
+        - **EDSM**: Elite Dangerous Star Map
+        
+        ## Data Flow
+        
+        ```
+        External APIs → Application → MongoDB/Redis → WebSocket → Dashboard
+                      ↓
+                   CrowdSec Security Engine
+                      ↓
+                   Traefik Reverse Proxy
+                      ↓
+                   SSL/TLS Termination
+                      ↓
+                   External Users
+        ```
+        
+        ## Security Architecture
+        
+        1. **Network Level**: Traefik handles SSL termination and routing
+        2. **Application Level**: CrowdSec monitors and blocks threats
+        3. **Authentication**: JWT tokens for admin access
+        4. **Data Protection**: Encrypted connections and secure headers
+        
+        ## Performance Considerations
+        
+        - **Caching**: Redis for frequently accessed data
+        - **Connection Pooling**: MongoDB connection optimization
+        - **Compression**: Gzip compression for HTTP responses
+        - **Rate Limiting**: Per-IP rate limiting for API endpoints
+        
+        ## Monitoring and Observability
+        
+        - **Health Checks**: Built-in health monitoring
+        - **Metrics**: Custom metrics for performance tracking
+        - **Logging**: Structured logging with Winston
+        - **Real-time Dashboard**: WebSocket-based monitoring interface
+        EOF
+
+    - name: Commit generated documentation
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add docs/
+        git commit -m "docs: Update generated documentation" || echo "No documentation changes to commit"
+
+    - name: Deploy documentation to GitHub Pages
+      if: github.ref == 'refs/heads/main'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs
+        force_orphan: true
+
+  docs-summary:
+    name: Documentation Summary
+    runs-on: ubuntu-latest
+    needs: [validate-docs, spell-check, generate-docs]
+    if: always()
+
+    steps:
+    - name: Documentation Summary
+      run: |
+        echo "## 📚 Documentation Status" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Validation | ${{ needs.validate-docs.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Spell Check | ${{ needs.spell-check.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Generated Docs | ${{ needs.generate-docs.result == 'success' && '✅ Updated' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          echo "📖 **Documentation URL**: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}" >> $GITHUB_STEP_SUMMARY
+        fi

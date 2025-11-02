@@ -6,9 +6,10 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "npm run test:unit && npm run test:integration",
+    "test": "npm run test:check-env && npm run test:unit && npm run test:integration",
+    "test:check-env": "node scripts/check-test-env.js",
     "test:unit": "jest tests/unit --coverage --ci --watchAll=false",
-    "test:integration": "jest tests/integration --ci --watchAll=false",
+    "test:integration": "jest tests/integration --ci --watchAll=false --forceExit",
     "test:e2e": "echo 'E2E tests not yet implemented' && exit 0",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

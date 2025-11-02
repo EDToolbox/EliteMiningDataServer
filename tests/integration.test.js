@@ -5,11 +5,37 @@ const express = require('express');
 const statisticsRoutes = require('../src/routes/statistics');
 const marketRoutes = require('../src/routes/market');
 
+// Check if MongoDB is available
+const mongoose = require('mongoose');
+
 describe('Elite Dangerous Mining Data Server - Complete Integration Tests', () => {
   let app;
   let mockServices;
 
+  beforeAll(async () => {
+    // Skip integration tests if MongoDB is not available in local environment
+    if (!process.env.CI && !process.env.GITHUB_ACTIONS) {
+      try {
+        await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test', {
+          serverSelectionTimeoutMS: 5000,
+          connectTimeoutMS: 5000
+        });
+        console.log('✅ MongoDB connection successful');
+      } catch (error) {
+        console.log('⚠️ MongoDB not available, skipping integration tests');
+        console.log('💡 To run integration tests, start MongoDB or run in CI environment');
+        return;
+      }
+    }
+  });
+
   beforeEach(() => {
+    // Skip if MongoDB not available in local environment
+    if (!process.env.CI && !process.env.GITHUB_ACTIONS && mongoose.connection.readyState !== 1) {
+      pending('MongoDB not available');
+      return;
+    }
+
     app = express();
     app.use(express.json());
 

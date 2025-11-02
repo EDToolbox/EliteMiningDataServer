@@ -9,6 +9,12 @@ const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');
 
+// Import monitoring services
+const HealthCheckService = require('../src/services/healthCheckService');
+const PerformanceMetricsService = require('../src/services/performanceMetricsService');
+const ErrorTrackingService = require('../src/services/errorTrackingService');
+const AlertingSystem = require('../src/services/alertingSystem');
+
 class DashboardController {
   constructor(server) {
     this.server = server;
@@ -19,8 +25,27 @@ class DashboardController {
       lastUpdate: Date.now()
     };
     
+    // Initialize monitoring services
+    this.healthCheckService = new HealthCheckService();
+    this.performanceMetricsService = new PerformanceMetricsService();
+    this.errorTrackingService = new ErrorTrackingService();
+    this.alertingSystem = new AlertingSystem();
+    
     // Initialize performance monitoring
     this.initMetrics();
+    this.initMonitoringServices();
+  }
+
+  async initMonitoringServices() {
+    try {
+      await this.healthCheckService.initialize();
+      await this.performanceMetricsService.initialize();
+      await this.errorTrackingService.initialize();
+      await this.alertingSystem.initialize();
+      console.log('Dashboard monitoring services initialized');
+    } catch (error) {
+      console.error('Error initializing monitoring services:', error);
+    }
   }
 
   initMetrics() {
@@ -197,25 +222,139 @@ class DashboardController {
   }
 
   async getHealthStatus() {
-    const status = await this.getSystemStatus();
-    const isHealthy = (
-      status.memoryUsage.used < status.memoryUsage.total * 0.9 &&
-      status.cpuUsage < 80 &&
-      status.connections.database > 0
-    );
+    try {
+      // Get comprehensive health check from monitoring service
+      const healthData = await this.healthCheckService.getHealthStatus();
+      
+      return {
+        status: healthData.status,
+        timestamp: healthData.timestamp,
+        uptime: healthData.uptime,
+        version: process.env.npm_package_version || '1.0.0',
+        checks: healthData.checks,
+        summary: healthData.summary,
+        monitoring: {
+          healthChecksEnabled: true,
+          performanceEnabled: true,
+          errorTrackingEnabled: true,
+          alertingEnabled: true
+        }
+      };
+    } catch (error) {
+      // Fallback to legacy health check if monitoring service fails
+      const status = await this.getSystemStatus();
+      const isHealthy = (
+        status.memoryUsage.used < status.memoryUsage.total * 0.9 &&
+        status.cpuUsage < 80 &&
+        status.connections.database > 0
+      );
 
-    return {
-      status: isHealthy ? 'healthy' : 'unhealthy',
-      timestamp: Date.now(),
-      uptime: status.uptime,
-      version: process.env.npm_package_version || '1.0.0',
-      checks: {
-        memory: status.memoryUsage.used < status.memoryUsage.total * 0.9,
-        cpu: status.cpuUsage < 80,
-        database: status.connections.database > 0,
-        websocket: status.connections.websocket >= 0
-      }
-    };
+      return {
+        status: isHealthy ? 'healthy' : 'unhealthy',
+        timestamp: Date.now(),
+        uptime: status.uptime,
+        version: process.env.npm_package_version || '1.0.0',
+        checks: {
+          memory: status.memoryUsage.used < status.memoryUsage.total * 0.9,
+          cpu: status.cpuUsage < 80,
+          database: status.connections.database > 0,
+          websocket: status.connections.websocket >= 0
+        },
+        monitoring: {
+          healthChecksEnabled: false,
+          performanceEnabled: false,
+          errorTrackingEnabled: false,
+          alertingEnabled: false
+        }
+      };
+    }
+  }
+
+  async getMonitoringDashboard() {
+    try {
+      const [health, performance, errors, alerts] = await Promise.all([
+        this.healthCheckService.getHealthStatus(),
+        this.performanceMetricsService.getMetrics({ timeRange: '1h' }),
+        this.errorTrackingService.getErrors({ timeRange: '24h' }),
+        this.alertingSystem.getActiveAlerts()
+      ]);
+
+      return {
+        success: true,
+        data: {
+          overview: {
+            systemHealth: health.status,
+            activeAlerts: alerts.alerts ? alerts.alerts.length : 0,
+            errorRate: performance.summary ? performance.summary.errorRate : 0,
+            averageResponseTime: performance.summary ? performance.summary.averageResponseTime : 0,
+            uptime: health.uptime ? this.formatUptime(health.uptime.milliseconds) : this.formatUptime(Date.now() - this.startTime)
+          },
+          health,
+          performance,
+          errors,
+          alerts
+        }
+      };
+    } catch (error) {
+      // Fallback to basic dashboard data
+      const basicStatus = await this.getSystemStatus();
+      const basicHealth = await this.getHealthStatus();
+      
+      return {
+        success: true,
+        data: {
+          overview: {
+            systemHealth: basicHealth.status,
+            activeAlerts: 0,
+            errorRate: 0,
+            averageResponseTime: 0,
+            uptime: this.formatUptime(basicStatus.uptime)
+          },
+          health: basicHealth,
+          performance: {
+            summary: {
+              totalRequests: 0,
+              errorRate: 0,
+              averageResponseTime: 0,
+              requestsPerSecond: 0
+            }
+          },
+          errors: {
+            summary: {
+              totalErrors: 0,
+              uniqueErrors: 0,
+              errorRate: 0,
+              criticalErrors: 0
+            }
+          },
+          alerts: {
+            alerts: [],
+            statistics: {
+              total: 0,
+              active: 0,
+              resolved: 0
+            }
+          }
+        }
+      };
+    }
+  }
+
+  formatUptime(milliseconds) {
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) {
+      return `${days}d ${hours % 24}h ${minutes % 60}m`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
   }
 }
 
@@ -266,12 +405,75 @@ function createDashboardRoutes(server) {
 
   router.get('/api/metrics', async (req, res) => {
     try {
-      res.json({
+      const timeRange = req.query.timeRange || '1h';
+      
+      // Get enhanced metrics from performance service
+      let enhancedMetrics;
+      try {
+        enhancedMetrics = await dashboard.performanceMetricsService.getMetrics({ timeRange });
+      } catch (error) {
+        enhancedMetrics = null;
+      }
+      
+      // Fallback to basic metrics
+      const basicMetrics = {
         dataProcessingRate: dashboard.metrics.dataProcessingRate,
         totalProcessed: dashboard.metrics.totalProcessed,
         lastUpdate: dashboard.metrics.lastUpdate,
         uptime: Date.now() - dashboard.startTime
-      });
+      };
+      
+      res.json(enhancedMetrics || basicMetrics);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // New monitoring endpoints
+  router.get('/api/monitoring/dashboard', async (req, res) => {
+    try {
+      const dashboardData = await dashboard.getMonitoringDashboard();
+      res.json(dashboardData);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/api/monitoring/performance', async (req, res) => {
+    try {
+      const timeRange = req.query.timeRange || '1h';
+      const performanceData = await dashboard.performanceMetricsService.getMetrics({ timeRange });
+      res.json(performanceData);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/api/monitoring/errors', async (req, res) => {
+    try {
+      const timeRange = req.query.timeRange || '24h';
+      const severity = req.query.severity;
+      const errorData = await dashboard.errorTrackingService.getErrors({ timeRange, severity });
+      res.json(errorData);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/api/monitoring/alerts', async (req, res) => {
+    try {
+      const alertData = await dashboard.alertingSystem.getActiveAlerts();
+      res.json(alertData);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.post('/api/monitoring/alerts/:alertId/acknowledge', async (req, res) => {
+    try {
+      const { alertId } = req.params;
+      const result = await dashboard.alertingSystem.acknowledgeAlert(alertId);
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

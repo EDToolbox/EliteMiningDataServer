@@ -154,6 +154,10 @@ jobs:
   security-scan:
     name: Security Scan Release
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     needs: build-and-publish
 
     steps:

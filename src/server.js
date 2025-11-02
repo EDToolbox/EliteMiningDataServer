@@ -5,17 +5,25 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 
 const logger = require('./services/logger');
 const MongoService = require('./services/mongoService');
+const MarketDataService = require('./services/marketDataService');
+const StatisticsService = require('./services/statisticsService');
+const CacheManager = require('./services/cacheManager');
 const EDDNClient = require('./clients/eddnClient');
-const InaraClient = require('../clients/inaraClient');
-const EDSMClient = require('../clients/edsmClient');
+const InaraClient = require('./clients/inaraClient');
+const EDSMClient = require('./clients/edsmClient');
 
-const miningRoutes = require('../routes/mining');
-const systemRoutes = require('../routes/systems');
-const commodityRoutes = require('../routes/commodities');
-const statusRoutes = require('../routes/status');
+const miningRoutes = require('./routes/mining');
+const systemRoutes = require('./routes/systems');
+const commodityRoutes = require('./routes/commodities');
+const statusRoutes = require('./routes/status');
+
+// Import additional optimized routes
+const marketRoutes = require('./routes/market');
+const statsRoutes = require('./routes/stats');
 
 class Server {
   constructor(config) {
@@ -36,36 +44,133 @@ class Server {
   }
 
   setupMiddleware() {
-    // Security and compression
-    this.app.use(helmet());
-    this.app.use(compression());
-    
-    // CORS
-    this.app.use(cors({
-      origin: this.config.allowedOrigins || '*',
-      credentials: true
+    // Security headers with enhanced configuration
+    this.app.use(helmet({
+      contentSecurityPolicy: false // Allow for development
     }));
+
+    // Compression with advanced options
+    this.app.use(compression({
+      level: 6,
+      threshold: 1024,
+      filter: (req, res) => {
+        if (req.headers['x-no-compression']) {
+          return false;
+        }
+        return compression.filter(req, res);
+      }
+    }));
+    
+    // CORS with enhanced configuration
+    this.app.use(cors({
+      origin: this.config.allowedOrigins || process.env.ALLOWED_ORIGINS?.split(',') || '*',
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
+    }));
+    
+    // Rate limiting for API endpoints
+    const apiLimiter = rateLimit({
+      windowMs: parseInt(process.env.API_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+      max: parseInt(process.env.API_RATE_LIMIT_MAX_REQUESTS) || 100,
+      message: {
+        error: 'Too many requests from this IP, please try again later.',
+        retryAfter: '15 minutes'
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
+      skip: (req) => {
+        // Skip rate limiting for health checks
+        return req.path === '/health';
+      }
+    });
+    this.app.use('/api/', apiLimiter);
     
     // Request logging
     this.app.use(morgan('combined', {
       stream: { write: message => logger.info(message.trim()) }
     }));
     
-    // Body parsing
+    // Body parsing with larger limits for mining data
     this.app.use(express.json({ limit: '10mb' }));
-    this.app.use(express.urlencoded({ extended: true }));
-    
-    // Rate limiting would be added here in production
-    // this.app.use(rateLimit({ ... }));
+    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+    // Add request timing and enhanced logging
+    this.app.use((req, res, next) => {
+      req.startTime = Date.now();
+      res.on('finish', () => {
+        const duration = Date.now() - req.startTime;
+        logger.info(`${req.method} ${req.path} - ${res.statusCode} - ${duration}ms - ${req.ip}`);
+        
+        // Track API usage for statistics
+        if (this.statisticsService && req.path.startsWith('/api/')) {
+          this.statisticsService.trackAPIUsage(req.path, req.method, res.statusCode, duration);
+        }
+      });
+      next();
+    });
   }
 
   setupRoutes() {
-    // Health check
+    // Enhanced health check with service status
     this.app.get('/health', (req, res) => {
-      res.json({ 
-        status: 'ok', 
+      res.json({
+        status: 'healthy',
         timestamp: new Date().toISOString(),
-        uptime: process.uptime()
+        version: process.env.npm_package_version || '1.0.0',
+        uptime: process.uptime(),
+        services: {
+          mongodb: this.database ? this.database.isConnected() : false,
+          eddnClient: this.eddnClient ? this.eddnClient.isConnected() : false,
+          websocket: this.wss ? this.wss.clients.size : 0
+        },
+        memory: process.memoryUsage(),
+        nodeVersion: process.version
+      });
+    });
+
+    // Server statistics endpoint
+    this.app.get('/api/server/stats', (req, res) => {
+      const stats = {
+        server: {
+          uptime: process.uptime(),
+          memory: process.memoryUsage(),
+          nodeVersion: process.version,
+          platform: process.platform,
+          arch: process.arch
+        },
+        websocket: {
+          connectedClients: this.wss ? this.wss.clients.size : 0
+        },
+        timestamp: new Date().toISOString()
+      };
+      
+      // Add EDDN stats if available
+      if (this.eddnClient && this.eddnClient.getStats) {
+        stats.eddn = this.eddnClient.getStats();
+      }
+      
+      res.json(stats);
+    });
+
+    // API documentation endpoint
+    this.app.get('/api/docs', (req, res) => {
+      res.json({
+        title: 'Elite Dangerous Mining Data Server API',
+        version: process.env.npm_package_version || '1.0.0',
+        description: 'API server for Elite Dangerous mining data with EDDN, Inara, and EDSM integration',
+        endpoints: {
+          health: '/health - Server health status',
+          stats: '/api/server/stats - Server statistics',
+          mining: '/api/mining/* - Mining data endpoints',
+          systems: '/api/systems/* - System data endpoints', 
+          commodities: '/api/commodities/* - Commodity data endpoints',
+          status: '/api/status/* - Status endpoints'
+        },
+        websocket: {
+          url: `ws://${req.get('host')}`,
+          description: 'Real-time updates for mining data'
+        }
       });
     });
 
@@ -74,6 +179,14 @@ class Server {
     this.app.use('/api/systems', systemRoutes);
     this.app.use('/api/commodities', commodityRoutes);
     this.app.use('/api/status', statusRoutes);
+
+    // Add new optimized routes if they exist
+    try {
+      this.app.use('/api/market', marketRoutes);
+      this.app.use('/api/stats', statsRoutes);
+    } catch (error) {
+      logger.warn('Optional routes not available:', error.message);
+    }
     
     // 404 handler
     this.app.use('*', (req, res) => {
@@ -241,6 +354,18 @@ class Server {
       this.eddnClient.connect().catch(error => {
         logger.error('Failed to connect to EDDN:', error);
       });
+      
+      // Initialize services
+      this.cacheManager = new CacheManager();
+      await this.cacheManager.initialize();
+      
+      this.marketDataService = new MarketDataService(this.database, this.cacheManager);
+      this.statisticsService = new StatisticsService(this.database, this.cacheManager);
+      
+      // Make services available to routes
+      this.app.locals.cacheManager = this.cacheManager;
+      this.app.locals.marketDataService = this.marketDataService;
+      this.app.locals.statisticsService = this.statisticsService;
       
       logger.info('Server initialized successfully');
     } catch (error) {

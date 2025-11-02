@@ -43,6 +43,82 @@
                             <span class="value" id="cpuUsage">--</span>
                             <span class="label">CPU Usage</span>
                         </div>
+                        <div class="metric">
+                            <span class="value" id="healthStatus">--</span>
+                            <span class="label">Health Status</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-chart-line"></i> Performance</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="metric">
+                            <span class="value" id="responseTime">--</span>
+                            <span class="label">Avg Response</span>
+                        </div>
+                        <div class="metric">
+                            <span class="value" id="errorRate">--</span>
+                            <span class="label">Error Rate</span>
+                        </div>
+                        <div class="metric">
+                            <span class="value" id="requestsPerSecond">--</span>
+                            <span class="label">Requests/sec</span>
+                        </div>
+                        <div class="metric">
+                            <span class="value" id="totalRequests">--</span>
+                            <span class="label">Total Requests</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-exclamation-triangle"></i> Error Tracking</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="metric">
+                            <span class="value" id="totalErrors">--</span>
+                            <span class="label">Total Errors</span>
+                        </div>
+                        <div class="metric">
+                            <span class="value" id="criticalErrors">--</span>
+                            <span class="label">Critical</span>
+                        </div>
+                        <div class="metric">
+                            <span class="value" id="uniqueErrors">--</span>
+                            <span class="label">Unique Errors</span>
+                        </div>
+                        <div class="metric">
+                            <span class="value" id="errorTrend">--</span>
+                            <span class="label">24h Trend</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-bell"></i> Alerts</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="metric">
+                            <span class="value" id="activeAlerts">--</span>
+                            <span class="label">Active Alerts</span>
+                        </div>
+                        <div class="metric">
+                            <span class="value" id="alertSeverity">--</span>
+                            <span class="label">Highest Severity</span>
+                        </div>
+                        <div class="metric">
+                            <span class="value" id="resolvedToday">--</span>
+                            <span class="label">Resolved Today</span>
+                        </div>
+                        <div class="metric">
+                            <span class="value" id="alertTrend">--</span>
+                            <span class="label">Weekly Trend</span>
+                        </div>
                     </div>
                 </div>
 
@@ -115,6 +191,28 @@
                 <div class="chart-container">
                     <div class="card">
                         <div class="card-header">
+                            <h3><i class="fas fa-chart-line"></i> Response Time Trends</h3>
+                        </div>
+                        <div class="card-content">
+                            <canvas id="responseTimeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-chart-area"></i> Error Distribution</h3>
+                        </div>
+                        <div class="card-content">
+                            <canvas id="errorDistributionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <div class="card">
+                        <div class="card-header">
                             <h3><i class="fas fa-chart-line"></i> Data Processing Rate</h3>
                         </div>
                         <div class="card-content">
@@ -130,6 +228,86 @@
                         </div>
                         <div class="card-content">
                             <canvas id="sourceDistributionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Active Alerts Section -->
+            <section class="alerts-section">
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-bell"></i> Active Alerts</h3>
+                        <div class="card-actions">
+                            <button class="btn-refresh" id="refreshAlerts">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                            <button class="btn-test" id="testAlert">
+                                <i class="fas fa-test-tube"></i> Test Alert
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <div id="alertsContainer" class="alerts-container">
+                            <!-- Active alerts will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Performance Metrics Section -->
+            <section class="performance-section">
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-tachometer-alt"></i> Performance Metrics</h3>
+                        <div class="card-actions">
+                            <select id="metricsTimeRange" title="Select time range for metrics">
+                                <option value="1h">Last Hour</option>
+                                <option value="6h">Last 6 Hours</option>
+                                <option value="24h">Last 24 Hours</option>
+                                <option value="7d">Last Week</option>
+                            </select>
+                            <button class="btn-refresh" id="refreshMetrics">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <h4>Request Statistics</h4>
+                                <div class="metric-details">
+                                    <div class="metric-row">
+                                        <span>Total Requests:</span>
+                                        <span id="metricsTotal">--</span>
+                                    </div>
+                                    <div class="metric-row">
+                                        <span>Requests/Second:</span>
+                                        <span id="metricsRps">--</span>
+                                    </div>
+                                    <div class="metric-row">
+                                        <span>Average Response Time:</span>
+                                        <span id="metricsAvgResponse">--</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="metric-item">
+                                <h4>Error Statistics</h4>
+                                <div class="metric-details">
+                                    <div class="metric-row">
+                                        <span>Error Rate:</span>
+                                        <span id="metricsErrorRate">--</span>
+                                    </div>
+                                    <div class="metric-row">
+                                        <span>Total Errors:</span>
+                                        <span id="metricsTotalErrors">--</span>
+                                    </div>
+                                    <div class="metric-row">
+                                        <span>Critical Errors:</span>
+                                        <span id="metricsCriticalErrors">--</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -175,7 +353,7 @@
                     <div class="card-header">
                         <h3><i class="fas fa-terminal"></i> System Logs</h3>
                         <div class="card-actions">
-                            <select id="logLevel">
+                            <select id="logLevel" title="Select log level filter">
                                 <option value="all">All Levels</option>
                                 <option value="error">Errors</option>
                                 <option value="warn">Warnings</option>

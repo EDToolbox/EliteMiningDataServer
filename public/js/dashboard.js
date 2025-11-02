@@ -7,8 +7,12 @@ class Dashboard {
         this.isConnected = false;
         this.dataBuffer = {
             dataRate: [],
-            sourceDistribution: { eddn: 0, inara: 0, edsm: 0 }
+            sourceDistribution: { eddn: 0, inara: 0, edsm: 0 },
+            responseTime: [],
+            errorDistribution: { critical: 0, high: 0, medium: 0, low: 0 }
         };
+        this.updateInterval = null;
+        this.monitoringEnabled = false;
         
         this.init();
     }
@@ -18,6 +22,14 @@ class Dashboard {
         this.setupCharts();
         this.setupEventListeners();
         this.loadInitialData();
+        this.startPeriodicUpdates();
+    }
+
+    startPeriodicUpdates() {
+        // Update dashboard data every 30 seconds
+        this.updateInterval = setInterval(() => {
+            this.loadMonitoringData();
+        }, 30000);
     }
 
     setupWebSocket() {
@@ -287,17 +299,37 @@ class Dashboard {
 
     setupEventListeners() {
         // Refresh mining data button
-        document.getElementById('refreshMiningData').addEventListener('click', () => {
+        document.getElementById('refreshMiningData')?.addEventListener('click', () => {
             this.loadMiningData();
         });
         
+        // Refresh alerts button
+        document.getElementById('refreshAlerts')?.addEventListener('click', () => {
+            this.loadAlertsData();
+        });
+
+        // Refresh metrics button
+        document.getElementById('refreshMetrics')?.addEventListener('click', () => {
+            this.loadPerformanceMetrics();
+        });
+
+        // Test alert button
+        document.getElementById('testAlert')?.addEventListener('click', () => {
+            this.testAlert();
+        });
+
+        // Metrics time range selector
+        document.getElementById('metricsTimeRange')?.addEventListener('change', (e) => {
+            this.loadPerformanceMetrics(e.target.value);
+        });
+        
         // Clear logs button
-        document.getElementById('clearLogs').addEventListener('click', () => {
+        document.getElementById('clearLogs')?.addEventListener('click', () => {
             document.getElementById('logContainer').innerHTML = '';
         });
         
         // Log level filter
-        document.getElementById('logLevel').addEventListener('change', (e) => {
+        document.getElementById('logLevel')?.addEventListener('change', (e) => {
             this.filterLogs(e.target.value);
         });
     }
@@ -358,6 +390,233 @@ class Dashboard {
             return `${hours}h ${minutes}m`;
         } else {
             return `${minutes}m`;
+        }
+    }
+
+    async loadMonitoringData() {
+        try {
+            const response = await fetch('/api/monitoring/dashboard');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.monitoringEnabled = true;
+                this.updateMonitoringDashboard(data.data);
+            } else {
+                this.monitoringEnabled = false;
+                this.loadBasicData();
+            }
+        } catch (error) {
+            console.error('Error loading monitoring data:', error);
+            this.monitoringEnabled = false;
+            this.loadBasicData();
+        }
+    }
+
+    updateMonitoringDashboard(data) {
+        // Update overview metrics
+        this.updateOverviewMetrics(data.overview);
+        
+        // Update health status
+        this.updateHealthStatus(data.health);
+        
+        // Update performance metrics
+        this.updatePerformanceDisplay(data.performance);
+        
+        // Update error tracking
+        this.updateErrorDisplay(data.errors);
+        
+        // Update alerts
+        this.updateAlertsDisplay(data.alerts);
+        
+        // Update charts with new data
+        this.updateMonitoringCharts(data);
+    }
+
+    updateOverviewMetrics(overview) {
+        if (document.getElementById('uptime')) {
+            document.getElementById('uptime').textContent = overview.uptime || '--';
+        }
+        if (document.getElementById('healthStatus')) {
+            document.getElementById('healthStatus').textContent = overview.systemHealth || '--';
+        }
+        if (document.getElementById('responseTime')) {
+            document.getElementById('responseTime').textContent = 
+                overview.averageResponseTime ? `${overview.averageResponseTime}ms` : '--';
+        }
+        if (document.getElementById('errorRate')) {
+            document.getElementById('errorRate').textContent = 
+                overview.errorRate ? `${overview.errorRate.toFixed(2)}%` : '--';
+        }
+        if (document.getElementById('activeAlerts')) {
+            document.getElementById('activeAlerts').textContent = overview.activeAlerts || '0';
+        }
+    }
+
+    updateHealthStatus(health) {
+        if (!health || !health.checks) return;
+        
+        const checks = health.checks;
+        const memoryPercent = checks.memory ? checks.memory.details?.heap?.usagePercent : 0;
+        const cpuPercent = checks.cpu ? checks.cpu.details?.usage : 0;
+        
+        if (document.getElementById('memoryUsage')) {
+            document.getElementById('memoryUsage').textContent = 
+                memoryPercent ? `${memoryPercent.toFixed(1)}%` : '--';
+        }
+        if (document.getElementById('cpuUsage')) {
+            document.getElementById('cpuUsage').textContent = 
+                cpuPercent ? `${cpuPercent.toFixed(1)}%` : '--';
+        }
+    }
+
+    updatePerformanceDisplay(performance) {
+        if (!performance || !performance.summary) return;
+        
+        const summary = performance.summary;
+        if (document.getElementById('totalRequests')) {
+            document.getElementById('totalRequests').textContent = summary.totalRequests || '0';
+        }
+        if (document.getElementById('requestsPerSecond')) {
+            document.getElementById('requestsPerSecond').textContent = 
+                summary.requestsPerSecond ? summary.requestsPerSecond.toFixed(2) : '0';
+        }
+    }
+
+    updateErrorDisplay(errors) {
+        if (!errors || !errors.summary) return;
+        
+        const summary = errors.summary;
+        if (document.getElementById('totalErrors')) {
+            document.getElementById('totalErrors').textContent = summary.totalErrors || '0';
+        }
+        if (document.getElementById('criticalErrors')) {
+            document.getElementById('criticalErrors').textContent = summary.criticalErrors || '0';
+        }
+        if (document.getElementById('uniqueErrors')) {
+            document.getElementById('uniqueErrors').textContent = summary.uniqueErrors || '0';
+        }
+        
+        // Calculate error trend
+        const errorTrend = summary.errorRate > 1 ? '↑' : summary.errorRate < 0.5 ? '↓' : '→';
+        if (document.getElementById('errorTrend')) {
+            document.getElementById('errorTrend').textContent = errorTrend;
+        }
+    }
+
+    updateAlertsDisplay(alerts) {
+        if (!alerts) return;
+        
+        const activeCount = alerts.alerts ? alerts.alerts.length : 0;
+        if (document.getElementById('activeAlerts')) {
+            document.getElementById('activeAlerts').textContent = activeCount;
+        }
+        
+        // Find highest severity
+        const severities = alerts.alerts?.map(a => a.severity) || [];
+        const highestSeverity = severities.includes('critical') ? 'Critical' : 
+                               severities.includes('warning') ? 'Warning' : 
+                               severities.includes('info') ? 'Info' : 'None';
+        if (document.getElementById('alertSeverity')) {
+            document.getElementById('alertSeverity').textContent = highestSeverity;
+        }
+        
+        // Update alerts container
+        this.renderActiveAlerts(alerts.alerts || []);
+    }
+
+    renderActiveAlerts(alerts) {
+        const container = document.getElementById('alertsContainer');
+        if (!container) return;
+        
+        if (alerts.length === 0) {
+            container.innerHTML = '<div class="no-alerts">No active alerts</div>';
+            return;
+        }
+        
+        container.innerHTML = alerts.map(alert => `
+            <div class="alert-item ${alert.severity}">
+                <div class="alert-header">
+                    <span class="alert-title">${alert.title || 'Alert'}</span>
+                    <span class="alert-severity">${alert.severity}</span>
+                    <span class="alert-time">${this.formatTime(alert.timestamp)}</span>
+                </div>
+                <div class="alert-message">${alert.message}</div>
+                <div class="alert-actions">
+                    <button class="btn-acknowledge" onclick="dashboard.acknowledgeAlert('${alert.id}')">
+                        Acknowledge
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async acknowledgeAlert(alertId) {
+        try {
+            const response = await fetch(`/api/monitoring/alerts/${alertId}/acknowledge`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                this.loadAlertsData();
+            }
+        } catch (error) {
+            console.error('Error acknowledging alert:', error);
+        }
+    }
+
+    async testAlert() {
+        try {
+            const response = await fetch('/api/monitoring/alerts/test', {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                alert('Test alert sent successfully!');
+            }
+        } catch (error) {
+            console.error('Error sending test alert:', error);
+            alert('Error sending test alert');
+        }
+    }
+
+    async loadAlertsData() {
+        try {
+            const response = await fetch('/api/monitoring/alerts');
+            const data = await response.json();
+            this.updateAlertsDisplay(data);
+        } catch (error) {
+            console.error('Error loading alerts:', error);
+        }
+    }
+
+    async loadPerformanceMetrics(timeRange = '1h') {
+        try {
+            const response = await fetch(`/api/monitoring/performance?timeRange=${timeRange}`);
+            const data = await response.json();
+            this.updatePerformanceDisplay(data);
+        } catch (error) {
+            console.error('Error loading performance metrics:', error);
+        }
+    }
+
+    formatTime(timestamp) {
+        return new Date(timestamp).toLocaleTimeString();
+    }
+
+    loadBasicData() {
+        // Fallback to original dashboard functionality
+        this.loadInitialData();
+    }
+
+    updateMonitoringCharts(data) {
+        // Update response time chart
+        if (this.charts.responseTimeChart && data.performance) {
+            // Implementation for response time chart updates
+        }
+
+        // Update error distribution chart
+        if (this.charts.errorDistributionChart && data.errors) {
+            // Implementation for error distribution chart updates
         }
     }
 }

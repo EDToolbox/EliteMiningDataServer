@@ -1,0 +1,1750 @@
+openapi: 3.0.3
+info:
+  title: Elite Dangerous Mining Data Server API
+  description: |
+    # Elite Dangerous Mining Data Server v2.0
+    
+    A comprehensive API server for Elite Dangerous mining data with real-time statistics, market analysis, and trading route optimization.
+    
+    ## Features
+    - **Real-time EDDN Data Processing**: Live data stream from Elite Dangerous Data Network
+    - **Market Data Analysis**: Comprehensive commodity pricing and trading routes
+    - **Mining Statistics**: Detailed mining location analytics and profitability tracking
+    - **Performance Monitoring**: Server and API usage statistics
+    - **WebSocket Integration**: Real-time updates for dynamic data
+    
+    ## Data Sources
+    - **EDDN (Elite Dangerous Data Network)**: Real-time game data via ZeroMQ
+    - **Inara API**: Community-driven market and station data  
+    - **EDSM API**: System coordinates and exploration data
+    
+    ## Rate Limiting
+    - Standard endpoints: 100 requests per 15 minutes per IP
+    - Statistics endpoints: 50 requests per 15 minutes per IP
+    - WebSocket connections: 10 concurrent connections per IP
+    
+    ## Caching
+    - Market data: 5-30 minutes TTL depending on volatility
+    - Statistics: 1-10 minutes TTL depending on endpoint
+    - System data: 24 hours TTL (rarely changes)
+    
+    ## Response Formats
+    All endpoints support JSON by default. Some endpoints also support CSV export via `?format=csv` parameter.
+    
+  version: "2.0.0"
+  contact:
+    name: Elite Mining Data Server
+    url: https://github.com/gOOvER/EliteMiningDataServer
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://api.elitemining.example.com
+    description: Production server
+
+paths:
+  # Health and Status Endpoints
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Server health check
+      description: Returns server health status and service availability
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: "healthy"
+                timestamp: "2025-11-02T12:00:00.000Z"
+                version: "2.0.0"
+                uptime: 3600.0
+                services:
+                  mongodb: true
+                  eddnClient: true
+                  websocket: 25
+                memory:
+                  rss: 85123072
+                  heapTotal: 67108864
+                  heapUsed: 45123456
+                  external: 2123456
+                nodeVersion: "v18.17.0"
+
+  # Statistics Endpoints
+  /api/stats:
+    get:
+      tags:
+        - Statistics
+      summary: Global server statistics
+      description: |
+        Returns comprehensive global statistics including:
+        - Total systems, stations, and commodities tracked
+        - Mining location statistics
+        - EDDN message processing statistics
+        - API usage metrics
+        - WebSocket connection statistics
+        - Server performance indicators
+      parameters:
+        - name: includeHistory
+          in: query
+          description: Include historical trend data
+          schema:
+            type: boolean
+            default: false
+        - name: timeRange
+          in: query
+          description: Time range for historical data
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d]
+            default: "24h"
+        - name: format
+          in: query
+          description: Response format
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        '200':
+          description: Global statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalStatistics'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/stats/eddn:
+    get:
+      tags:
+        - Statistics
+      summary: EDDN connection and message statistics
+      description: |
+        Returns detailed EDDN (Elite Dangerous Data Network) statistics including:
+        - Connection status and uptime
+        - Message processing rates and types
+        - Data validation statistics
+        - Network performance metrics
+      parameters:
+        - name: includeMessageBreakdown
+          in: query
+          description: Include detailed message type breakdown
+          schema:
+            type: boolean
+            default: true
+        - name: timeRange
+          in: query
+          description: Time range for statistics
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d]
+            default: "24h"
+      responses:
+        '200':
+          description: EDDN statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EDDNStatistics'
+
+  /api/stats/mining:
+    get:
+      tags:
+        - Statistics
+      summary: Mining data statistics and analytics
+      description: |
+        Returns comprehensive mining statistics including:
+        - Mining location counts and types
+        - Commodity distribution analysis
+        - Profitability metrics
+        - Hotspot efficiency data
+      parameters:
+        - name: commodity
+          in: query
+          description: Filter by specific commodity
+          schema:
+            type: string
+        - name: system
+          in: query
+          description: Filter by system name
+          schema:
+            type: string
+        - name: includeEfficiency
+          in: query
+          description: Include efficiency analysis
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Mining statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MiningStatistics'
+
+  /api/stats/api-usage:
+    get:
+      tags:
+        - Statistics
+      summary: API usage statistics and performance metrics
+      description: |
+        Returns API usage statistics including:
+        - Request counts by endpoint
+        - Response time analytics
+        - Error rate tracking
+        - Geographic usage distribution
+      parameters:
+        - name: endpoint
+          in: query
+          description: Filter by specific endpoint
+          schema:
+            type: string
+        - name: timeRange
+          in: query
+          description: Time range for usage data
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d]
+            default: "24h"
+        - name: includePerformance
+          in: query
+          description: Include performance metrics
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: API usage statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIUsageStatistics'
+
+  /api/stats/websocket:
+    get:
+      tags:
+        - Statistics
+      summary: WebSocket connection statistics
+      description: |
+        Returns WebSocket statistics including:
+        - Active connection counts
+        - Message delivery rates
+        - Client connection patterns
+        - Bandwidth usage metrics
+      responses:
+        '200':
+          description: WebSocket statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebSocketStatistics'
+
+  # Market Data Endpoints
+  /api/market/commodity/{commodityId}:
+    get:
+      tags:
+        - Market Data
+      summary: Get commodity market data
+      description: |
+        Returns comprehensive market data for a specific commodity including:
+        - Current buy/sell prices across stations
+        - Supply and demand information
+        - Price history and trends
+        - Profit opportunities
+      parameters:
+        - name: commodityId
+          in: path
+          required: true
+          description: The commodity identifier (e.g., "Painite", "Low Temperature Diamonds")
+          schema:
+            type: string
+        - name: systemName
+          in: query
+          description: Filter by system name
+          schema:
+            type: string
+        - name: stationName
+          in: query
+          description: Filter by station name
+          schema:
+            type: string
+        - name: maxAge
+          in: query
+          description: Maximum age of data in hours
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 168
+            default: 24
+        - name: includeHistory
+          in: query
+          description: Include price history data
+          schema:
+            type: boolean
+            default: false
+        - name: includeTrends
+          in: query
+          description: Include trend analysis
+          schema:
+            type: boolean
+            default: false
+        - name: includeInaraData
+          in: query
+          description: Include data from Inara API
+          schema:
+            type: boolean
+            default: false
+        - name: maxDistance
+          in: query
+          description: Maximum distance from reference system (LY)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+        - name: sortBy
+          in: query
+          description: Sort results by field
+          schema:
+            type: string
+            enum: [profit, price, distance, supply, demand]
+            default: profit
+        - name: limit
+          in: query
+          description: Maximum number of results
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+        - name: format
+          in: query
+          description: Response format
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        '200':
+          description: Commodity data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommodityData'
+        '404':
+          description: Commodity not found or no data available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/market/routes:
+    get:
+      tags:
+        - Market Data
+      summary: Calculate optimal trading routes
+      description: |
+        Calculates optimal trading routes based on:
+        - Ship specifications (jump range, cargo capacity)
+        - Available credits for trading
+        - System security preferences
+        - Profit optimization algorithms
+      parameters:
+        - name: startSystem
+          in: query
+          required: true
+          description: Starting system name
+          schema:
+            type: string
+        - name: jumpRange
+          in: query
+          description: Ship jump range in light years
+          schema:
+            type: number
+            minimum: 5
+            maximum: 100
+            default: 20
+        - name: cargoCapacity
+          in: query
+          description: Ship cargo capacity in tons
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: shipSize
+          in: query
+          description: Ship size for landing pad requirements
+          schema:
+            type: string
+            enum: [small, medium, large]
+            default: medium
+        - name: credits
+          in: query
+          description: Available credits for trading
+          schema:
+            type: integer
+            minimum: 1000
+            default: 1000000
+        - name: maxHops
+          in: query
+          description: Maximum number of route hops
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 3
+        - name: minProfitPerTon
+          in: query
+          description: Minimum profit per ton threshold
+          schema:
+            type: integer
+            minimum: 0
+            default: 500
+        - name: maxRouteTime
+          in: query
+          description: Maximum route time in minutes
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1440
+            default: 60
+        - name: securityLevel
+          in: query
+          description: Preferred system security level
+          schema:
+            type: string
+            enum: [high, medium, low, any]
+            default: any
+        - name: stationType
+          in: query
+          description: Preferred station type
+          schema:
+            type: string
+            enum: [planetary, orbital, any]
+            default: any
+        - name: includeRisk
+          in: query
+          description: Include risk assessment
+          schema:
+            type: boolean
+            default: true
+        - name: includeVisualization
+          in: query
+          description: Include route visualization data
+          schema:
+            type: boolean
+            default: true
+        - name: sortBy
+          in: query
+          description: Sort routes by metric
+          schema:
+            type: string
+            enum: [totalProfit, profitPerTon, profitPerHour]
+            default: totalProfit
+        - name: limit
+          in: query
+          description: Maximum number of routes to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Trading routes calculated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradingRoutes'
+        '400':
+          description: Missing required parameters or invalid values
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Start system not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: EDSM service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/market/trends:
+    get:
+      tags:
+        - Market Data
+      summary: Market trend analysis
+      description: |
+        Provides comprehensive market trend analysis including:
+        - Price trends over time
+        - Seasonal patterns
+        - Volatility indicators
+        - Predictive analysis
+        - Regional comparisons
+      parameters:
+        - name: commodity
+          in: query
+          description: Commodity name or ID
+          schema:
+            type: string
+        - name: system
+          in: query
+          description: System name filter
+          schema:
+            type: string
+        - name: region
+          in: query
+          description: Region filter
+          schema:
+            type: string
+        - name: timeRange
+          in: query
+          description: Analysis time range
+          schema:
+            type: string
+            enum: [1d, 7d, 30d, 90d, 1y]
+            default: 30d
+        - name: interval
+          in: query
+          description: Data aggregation interval
+          schema:
+            type: string
+            enum: [hourly, daily, weekly, monthly]
+            default: daily
+        - name: includeMovingAverages
+          in: query
+          description: Include moving average calculations
+          schema:
+            type: boolean
+            default: true
+        - name: includeSeasonalAnalysis
+          in: query
+          description: Include seasonal pattern analysis
+          schema:
+            type: boolean
+            default: true
+        - name: includeVolatilityAnalysis
+          in: query
+          description: Include volatility indicators
+          schema:
+            type: boolean
+            default: true
+        - name: includeRegionalComparison
+          in: query
+          description: Include regional price comparisons
+          schema:
+            type: boolean
+            default: true
+        - name: includePredictions
+          in: query
+          description: Include predictive analysis
+          schema:
+            type: boolean
+            default: true
+        - name: includeVisualization
+          in: query
+          description: Include chart visualization data
+          schema:
+            type: boolean
+            default: true
+        - name: limit
+          in: query
+          description: Maximum data points to return
+          schema:
+            type: integer
+            minimum: 10
+            maximum: 10000
+            default: 1000
+      responses:
+        '200':
+          description: Market trends retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketTrends'
+        '400':
+          description: Invalid time range or interval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No historical data found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/market/station/{system}/{station}:
+    get:
+      tags:
+        - Market Data
+      summary: Station-specific market data
+      description: |
+        Returns complete market data for a specific station including:
+        - All available commodities with prices
+        - Station services and facilities
+        - Profit opportunities
+        - Nearby station comparisons
+      parameters:
+        - name: system
+          in: path
+          required: true
+          description: System name
+          schema:
+            type: string
+        - name: station
+          in: path
+          required: true
+          description: Station name
+          schema:
+            type: string
+        - name: includeServices
+          in: query
+          description: Include station services information
+          schema:
+            type: boolean
+            default: true
+        - name: includeShipyard
+          in: query
+          description: Include shipyard information
+          schema:
+            type: boolean
+            default: false
+        - name: includeOutfitting
+          in: query
+          description: Include outfitting information
+          schema:
+            type: boolean
+            default: false
+        - name: includeProfitOpportunities
+          in: query
+          description: Include profit opportunity analysis
+          schema:
+            type: boolean
+            default: true
+        - name: includeNearbyComparison
+          in: query
+          description: Include nearby station price comparisons
+          schema:
+            type: boolean
+            default: true
+        - name: maxAge
+          in: query
+          description: Maximum age of market data in hours
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 168
+            default: 24
+        - name: filterCommodities
+          in: query
+          description: Comma-separated list of commodities to include
+          schema:
+            type: string
+        - name: minProfit
+          in: query
+          description: Minimum profit threshold for opportunities
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: sortBy
+          in: query
+          description: Sort commodities by field
+          schema:
+            type: string
+            enum: [profit_desc, profit_asc, price_desc, price_asc, name]
+            default: profit_desc
+        - name: limit
+          in: query
+          description: Maximum number of commodities to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 1000
+        - name: format
+          in: query
+          description: Response format
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        '200':
+          description: Station market data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StationMarketData'
+        '404':
+          description: System or station not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        uptime:
+          type: number
+          description: Server uptime in seconds
+        services:
+          type: object
+          properties:
+            mongodb:
+              type: boolean
+            eddnClient:
+              type: boolean
+            websocket:
+              type: integer
+              description: Number of active WebSocket connections
+        memory:
+          type: object
+          properties:
+            rss:
+              type: integer
+            heapTotal:
+              type: integer
+            heapUsed:
+              type: integer
+            external:
+              type: integer
+        nodeVersion:
+          type: string
+
+    GlobalStatistics:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            systems:
+              type: object
+              properties:
+                total:
+                  type: integer
+                withStations:
+                  type: integer
+                withMiningData:
+                  type: integer
+                averagePopulation:
+                  type: number
+            stations:
+              type: object
+              properties:
+                total:
+                  type: integer
+                withMarketData:
+                  type: integer
+                withShipyard:
+                  type: integer
+                withOutfitting:
+                  type: integer
+            commodities:
+              type: object
+              properties:
+                total:
+                  type: integer
+                tracked:
+                  type: integer
+                withPriceData:
+                  type: integer
+            mining:
+              type: object
+              properties:
+                locations:
+                  type: integer
+                hotspots:
+                  type: integer
+                uniqueMaterials:
+                  type: integer
+            eddn:
+              type: object
+              properties:
+                messagesProcessed:
+                  type: integer
+                uptime:
+                  type: number
+                connectionStatus:
+                  type: string
+            api:
+              type: object
+              properties:
+                totalRequests:
+                  type: integer
+                averageResponseTime:
+                  type: number
+                errorRate:
+                  type: number
+            websocket:
+              type: object
+              properties:
+                activeConnections:
+                  type: integer
+                totalConnections:
+                  type: integer
+                messagesDelivered:
+                  type: integer
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+
+    EDDNStatistics:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            connection:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [connected, disconnected, reconnecting]
+                uptime:
+                  type: integer
+                  description: Connection uptime in milliseconds
+                reconnections:
+                  type: integer
+                lastReconnect:
+                  type: string
+                  format: date-time
+            messages:
+              type: object
+              properties:
+                total:
+                  type: integer
+                perMinute:
+                  type: number
+                byType:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                lastProcessed:
+                  type: string
+                  format: date-time
+            performance:
+              type: object
+              properties:
+                averageLatency:
+                  type: number
+                  description: Average processing latency in milliseconds
+                throughput:
+                  type: number
+                  description: Messages per second
+                queueSize:
+                  type: integer
+                memoryUsage:
+                  type: integer
+            validation:
+              type: object
+              properties:
+                validMessages:
+                  type: integer
+                invalidMessages:
+                  type: integer
+                schemaErrors:
+                  type: integer
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+
+    MiningStatistics:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            locations:
+              type: object
+              properties:
+                total:
+                  type: integer
+                byType:
+                  type: object
+                  properties:
+                    asteroidBelts:
+                      type: integer
+                    planetRings:
+                      type: integer
+                    hotspots:
+                      type: integer
+                uniqueSystems:
+                  type: integer
+            commodities:
+              type: object
+              properties:
+                distribution:
+                  type: object
+                  additionalProperties:
+                    type: number
+                    description: Percentage distribution
+                topProfitable:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      avgProfitPerHour:
+                        type: number
+                      locations:
+                        type: integer
+            profitability:
+              type: object
+              properties:
+                topLocations:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      system:
+                        type: string
+                      body:
+                        type: string
+                      material:
+                        type: string
+                      profitPerHour:
+                        type: number
+                        description: Credits per hour
+                averageProfitPerHour:
+                  type: number
+                totalMinersActive:
+                  type: integer
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+
+    APIUsageStatistics:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            requests:
+              type: object
+              properties:
+                total:
+                  type: integer
+                byEndpoint:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                byMethod:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                perMinute:
+                  type: number
+            performance:
+              type: object
+              properties:
+                averageResponseTime:
+                  type: number
+                  description: Average response time in milliseconds
+                slowestEndpoints:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      endpoint:
+                        type: string
+                      avgResponseTime:
+                        type: number
+                p95ResponseTime:
+                  type: number
+                p99ResponseTime:
+                  type: number
+            errors:
+              type: object
+              properties:
+                total:
+                  type: integer
+                rate:
+                  type: number
+                  description: Error rate percentage
+                byStatus:
+                  type: object
+                  additionalProperties:
+                    type: integer
+            geographic:
+              type: object
+              properties:
+                topCountries:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      country:
+                        type: string
+                      requests:
+                        type: integer
+                      percentage:
+                        type: number
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+
+    WebSocketStatistics:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            connections:
+              type: object
+              properties:
+                active:
+                  type: integer
+                total:
+                  type: integer
+                  description: Total connections since server start
+                peak:
+                  type: integer
+                  description: Peak concurrent connections
+                averageDuration:
+                  type: number
+                  description: Average connection duration in seconds
+            messages:
+              type: object
+              properties:
+                sent:
+                  type: integer
+                delivered:
+                  type: integer
+                failed:
+                  type: integer
+                deliveryRate:
+                  type: number
+                  description: Message delivery success rate percentage
+                perSecond:
+                  type: number
+            bandwidth:
+              type: object
+              properties:
+                totalBytes:
+                  type: integer
+                  description: Total bytes transmitted
+                averagePerConnection:
+                  type: number
+                  description: Average bytes per connection
+                bytesPerSecond:
+                  type: number
+            subscriptions:
+              type: object
+              properties:
+                byChannel:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                totalSubscriptions:
+                  type: integer
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+
+    CommodityData:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            commodity:
+              type: object
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                category:
+                  type: string
+                rarity:
+                  type: string
+                  enum: [common, uncommon, rare, very_rare]
+            filter:
+              type: object
+              properties:
+                systemName:
+                  type: string
+                  nullable: true
+                stationName:
+                  type: string
+                  nullable: true
+                maxAge:
+                  type: integer
+                maxDistance:
+                  type: integer
+            sources:
+              type: object
+              properties:
+                eddn:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    locations:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/MarketLocation'
+                    statistics:
+                      type: object
+                    lastUpdated:
+                      type: string
+                      format: date-time
+                      nullable: true
+                inara:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    data:
+                      type: array
+                      nullable: true
+                    lastUpdated:
+                      type: string
+                      format: date-time
+                      nullable: true
+            analytics:
+              type: object
+              properties:
+                priceAnalysis:
+                  type: object
+                  nullable: true
+                profitOpportunities:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ProfitOpportunity'
+                marketVolatility:
+                  type: object
+                  nullable: true
+                regionalComparison:
+                  type: object
+                  nullable: true
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+
+    MarketLocation:
+      type: object
+      properties:
+        systemName:
+          type: string
+        stationName:
+          type: string
+        buyPrice:
+          type: integer
+          minimum: 0
+        sellPrice:
+          type: integer
+          minimum: 0
+        supply:
+          type: integer
+          minimum: 0
+        demand:
+          type: integer
+          minimum: 0
+        lastUpdated:
+          type: string
+          format: date-time
+        dataAge:
+          type: number
+          description: Age of data in hours
+        distance:
+          type: number
+          description: Distance from reference point in light years
+          nullable: true
+        stationServices:
+          type: array
+          items:
+            type: string
+
+    ProfitOpportunity:
+      type: object
+      properties:
+        buyLocation:
+          $ref: '#/components/schemas/MarketLocation'
+        sellLocation:
+          $ref: '#/components/schemas/MarketLocation'
+        profitPerTon:
+          type: integer
+        totalProfit:
+          type: integer
+        distance:
+          type: number
+          description: Distance between locations in light years
+        riskLevel:
+          type: string
+          enum: [low, medium, high]
+        timeEstimate:
+          type: number
+          description: Estimated time in minutes
+
+    TradingRoutes:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            routes:
+              type: array
+              items:
+                $ref: '#/components/schemas/TradingRoute'
+            startSystem:
+              type: object
+              properties:
+                name:
+                  type: string
+                coordinates:
+                  $ref: '#/components/schemas/Coordinates'
+            searchParameters:
+              type: object
+              properties:
+                jumpRange:
+                  type: number
+                cargoCapacity:
+                  type: integer
+                credits:
+                  type: integer
+                maxHops:
+                  type: integer
+            summary:
+              type: object
+              properties:
+                totalRoutes:
+                  type: integer
+                bestTotalProfit:
+                  type: integer
+                bestProfitPerTon:
+                  type: integer
+                averageRouteTime:
+                  type: number
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+
+    TradingRoute:
+      type: object
+      properties:
+        routeId:
+          type: string
+        hops:
+          type: array
+          items:
+            $ref: '#/components/schemas/RouteHop'
+        totalProfit:
+          type: integer
+        profitPerTon:
+          type: integer
+        profitPerHour:
+          type: integer
+        estimatedTime:
+          type: number
+          description: Total route time in minutes
+        totalDistance:
+          type: number
+          description: Total route distance in light years
+        riskAssessment:
+          type: object
+          properties:
+            overall:
+              type: string
+              enum: [low, medium, high]
+            factors:
+              type: array
+              items:
+                type: string
+        visualization:
+          type: object
+          nullable: true
+          properties:
+            waypoints:
+              type: array
+              items:
+                $ref: '#/components/schemas/Coordinates'
+            routeLine:
+              type: array
+              items:
+                $ref: '#/components/schemas/Coordinates'
+
+    RouteHop:
+      type: object
+      properties:
+        hopNumber:
+          type: integer
+        action:
+          type: string
+          enum: [buy, sell, travel]
+        system:
+          type: string
+        station:
+          type: string
+          nullable: true
+        commodity:
+          type: string
+          nullable: true
+        quantity:
+          type: integer
+          nullable: true
+        price:
+          type: integer
+          nullable: true
+        profit:
+          type: integer
+          nullable: true
+        distance:
+          type: number
+          description: Distance to this hop in light years
+        estimatedTime:
+          type: number
+          description: Time for this hop in minutes
+        coordinates:
+          $ref: '#/components/schemas/Coordinates'
+
+    MarketTrends:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            trends:
+              type: object
+              properties:
+                historical:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/PriceDataPoint'
+                movingAverages:
+                  type: object
+                  nullable: true
+                  properties:
+                    ma7:
+                      type: array
+                      items:
+                        type: number
+                    ma14:
+                      type: array
+                      items:
+                        type: number
+                    ma30:
+                      type: array
+                      items:
+                        type: number
+                seasonal:
+                  type: object
+                  nullable: true
+                  properties:
+                    patterns:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/SeasonalPattern'
+                    cycles:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/MarketCycle'
+            analytics:
+              type: object
+              properties:
+                volatility:
+                  type: object
+                  nullable: true
+                  properties:
+                    current:
+                      type: number
+                    average:
+                      type: number
+                    trend:
+                      type: string
+                      enum: [increasing, decreasing, stable]
+                predictions:
+                  type: object
+                  nullable: true
+                  properties:
+                    nextWeek:
+                      type: object
+                      properties:
+                        priceDirection:
+                          type: string
+                          enum: [up, down, stable]
+                        confidence:
+                          type: number
+                        estimatedChange:
+                          type: number
+                regionalComparison:
+                  type: object
+                  nullable: true
+                  additionalProperties:
+                    type: object
+                    properties:
+                      averagePrice:
+                        type: number
+                      priceVariance:
+                        type: number
+                      marketActivity:
+                        type: string
+                        enum: [high, medium, low]
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+
+    PriceDataPoint:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        buyPrice:
+          type: number
+        sellPrice:
+          type: number
+        volume:
+          type: integer
+        variance:
+          type: number
+
+    SeasonalPattern:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [weekly, monthly, quarterly, yearly]
+        pattern:
+          type: string
+          description: Description of the seasonal pattern
+        strength:
+          type: number
+          description: Strength of the pattern (0-1)
+        nextOccurrence:
+          type: string
+          format: date-time
+
+    MarketCycle:
+      type: object
+      properties:
+        length:
+          type: integer
+          description: Cycle length in days
+        phase:
+          type: string
+          enum: [peak, decline, trough, recovery]
+        nextPhase:
+          type: string
+          enum: [peak, decline, trough, recovery]
+        estimatedDuration:
+          type: integer
+          description: Estimated days until next phase
+
+    StationMarketData:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            station:
+              type: object
+              properties:
+                name:
+                  type: string
+                system:
+                  type: string
+                type:
+                  type: string
+                services:
+                  type: array
+                  items:
+                    type: string
+                landingPads:
+                  type: object
+                  properties:
+                    small:
+                      type: integer
+                    medium:
+                      type: integer
+                    large:
+                      type: integer
+                distanceFromStar:
+                  type: number
+                  description: Distance from main star in light seconds
+                government:
+                  type: string
+                economy:
+                  type: string
+                controllingFaction:
+                  type: string
+            market:
+              type: object
+              properties:
+                commodities:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/StationCommodity'
+                lastUpdated:
+                  type: string
+                  format: date-time
+                dataFreshness:
+                  type: string
+                  enum: [fresh, moderate, stale, very_stale]
+                totalCommodities:
+                  type: integer
+            analysis:
+              type: object
+              properties:
+                profitOpportunities:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ProfitOpportunity'
+                nearbyComparison:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/NearbyStationComparison'
+                marketActivity:
+                  type: string
+                  enum: [high, medium, low]
+                priceCompetitiveness:
+                  type: string
+                  enum: [excellent, good, average, poor]
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+
+    StationCommodity:
+      type: object
+      properties:
+        name:
+          type: string
+        buyPrice:
+          type: integer
+        sellPrice:
+          type: integer
+        supply:
+          type: integer
+        demand:
+          type: integer
+        category:
+          type: string
+        lastUpdated:
+          type: string
+          format: date-time
+        profitOpportunity:
+          type: object
+          nullable: true
+          properties:
+            type:
+              type: string
+              enum: [buy_here, sell_here]
+            profitPerTon:
+              type: integer
+            nearestStation:
+              type: string
+            distance:
+              type: number
+
+    NearbyStationComparison:
+      type: object
+      properties:
+        stationName:
+          type: string
+        systemName:
+          type: string
+        distance:
+          type: number
+          description: Distance in light years
+        priceComparison:
+          type: object
+          properties:
+            betterBuyPrices:
+              type: integer
+              description: Number of commodities with better buy prices
+            betterSellPrices:
+              type: integer
+              description: Number of commodities with better sell prices
+            avgPriceDifference:
+              type: number
+              description: Average price difference percentage
+
+    Coordinates:
+      type: object
+      properties:
+        x:
+          type: number
+        y:
+          type: number
+        z:
+          type: number
+
+    ResponseMetadata:
+      type: object
+      properties:
+        source:
+          type: string
+          enum: [cache, database, api]
+        processingTime:
+          type: number
+          description: Processing time in milliseconds
+        timestamp:
+          type: string
+          format: date-time
+        cacheStatus:
+          type: string
+          enum: [hit, miss, disabled]
+        dataFreshness:
+          type: string
+          enum: [fresh, moderate, stale]
+        version:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+          nullable: true
+
+  parameters:
+    TimeRange:
+      name: timeRange
+      in: query
+      description: Time range for data analysis
+      schema:
+        type: string
+        enum: [1h, 6h, 24h, 7d, 30d, 90d, 1y]
+        default: "24h"
+
+    Format:
+      name: format
+      in: query
+      description: Response format
+      schema:
+        type: string
+        enum: [json, csv]
+        default: json
+
+    Limit:
+      name: limit
+      in: query
+      description: Maximum number of results to return
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 50
+
+    MaxAge:
+      name: maxAge
+      in: query
+      description: Maximum age of data in hours
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 168
+        default: 24
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ServiceUnavailable:
+      description: Service temporarily unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Optional API key for enhanced rate limits
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Health
+    description: Server health and status endpoints
+  - name: Statistics
+    description: Server and data statistics endpoints
+  - name: Market Data
+    description: Commodity market data and trading information
+
+externalDocs:
+  description: Find more information about the Elite Dangerous Mining Data Server
+  url: https://github.com/gOOvER/EliteMiningDataServer

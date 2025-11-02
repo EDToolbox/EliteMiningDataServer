@@ -1,71 +1,203 @@
-# Elite Dangerous Mining Data Server - Docker Compose
-# Updated for modern Docker Compose (no version needed)
-# Uses Node.js LTS and MongoDB 8.0
+# =============================================================================
+# Elite Dangerous Mining Data Server - Unified Docker Compose
+# =============================================================================
+# Single docker-compose.yml for all environments
+# Use ENV_MODE and COMPOSE_PROFILES to control deployment
 
 services:
+  # =============================================================================
+  # MAIN APPLICATION
+  # =============================================================================
   elite-mining-server:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ${ENV_MODE:-development}
+    image: elite-mining-server:${ENV_MODE:-development}
+    container_name: elite-mining-server
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:${PORT:-3000}"
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - MONGODB_URI=mongodb://mongodb:27017/elite_mining
-      - MONGODB_DB_NAME=elite_mining
-      - MONGODB_MAX_CONNECTIONS=100
-      - EDDN_RELAY_URL=tcp://eddn.edcd.io:9500
-      - LOG_LEVEL=info
-      - CACHE_DURATION_MINUTES=15
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${PORT:-3000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - MONGODB_URI=${MONGODB_URI}
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME}
+      - MONGODB_MAX_CONNECTIONS=${MONGODB_MAX_CONNECTIONS}
+      - EDDN_RELAY_URL=${EDDN_RELAY_URL}
+      - EDDN_RECONNECT_INTERVAL=${EDDN_RECONNECT_INTERVAL}
+      - INARA_API_KEY=${INARA_API_KEY}
+      - EDSM_API_KEY=${EDSM_API_KEY}
+      - CACHE_DURATION_MINUTES=${CACHE_DURATION_MINUTES}
+      - MAX_CACHE_ENTRIES=${MAX_CACHE_ENTRIES}
+      - API_RATE_LIMIT_WINDOW_MS=${API_RATE_LIMIT_WINDOW_MS}
+      - API_RATE_LIMIT_MAX_REQUESTS=${API_RATE_LIMIT_MAX_REQUESTS}
+    env_file:
+      - .env
     volumes:
+      # Logs
       - mining_logs:/app/logs
+      # Development hot reload (only in development mode)
+      - type: bind
+        source: ./src
+        target: /app/src
+        bind:
+          create_host_path: true
+        read_only: true
+        consistency: cached
+    command: >
+      sh -c "
+        if [ \"$$NODE_ENV\" = \"development\" ]; then
+          npm run dev
+        else
+          npm start
+        fi
+      "
     restart: unless-stopped
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:${PORT:-3000}/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - elite-mining-network
 
-  # MongoDB for high-volume data storage
+  # =============================================================================
+  # DATABASE
+  # =============================================================================
   mongodb:
     image: mongo:8.0
+    container_name: elite-mining-mongodb
     ports:
-      - "27017:27017"
+      - "${MONGODB_PORT:-27017}:27017"
     environment:
-      - MONGO_INITDB_DATABASE=elite_mining
+      - MONGO_INITDB_DATABASE=${MONGODB_DB_NAME:-elite_mining}
+      # Only set auth in production
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
-      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
-    command: --wiredTigerCacheSizeGB 2 --wiredTigerCollectionBlockCompressor zstd
+      # Initialize database if init script exists
+      - type: bind
+        source: ./mongo-init.js
+        target: /docker-entrypoint-initdb.d/mongo-init.js
+        read_only: true
+        bind:
+          create_host_path: false
+    command: >
+      --wiredTigerCacheSizeGB ${MONGODB_CACHE_SIZE_GB:-2}
+      --wiredTigerCollectionBlockCompressor zstd
+      --bind_ip_all
     restart: unless-stopped
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/elite_mining --quiet
+      test: |
+        if [ "${MONGO_ROOT_USERNAME}" ]; then
+          echo 'db.runCommand("ping").ok' | mongosh --username $MONGO_ROOT_USERNAME --password $MONGO_ROOT_PASSWORD admin --quiet
+        else
+          echo 'db.runCommand("ping").ok' | mongosh ${MONGODB_DB_NAME:-elite_mining} --quiet
+        fi
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - elite-mining-network
 
-  # Optional: MongoDB Express for database administration
+  # =============================================================================
+  # ADMIN INTERFACE (Optional - controlled by ENV_MODE)
+  # =============================================================================
   mongo-express:
     image: mongo-express:latest
+    container_name: elite-mining-mongo-express
     ports:
-      - "8081:8081"
+      - "${MONGO_EXPRESS_PORT:-8081}:8081"
     environment:
       - ME_CONFIG_MONGODB_SERVER=mongodb
-      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_MONGODB_PORT=${MONGODB_PORT:-27017}
       - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USERNAME:-admin}
       - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD:-changeme123}
+      # Auth settings based on MongoDB configuration
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_ROOT_USERNAME}
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_ROOT_PASSWORD}
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     restart: unless-stopped
+    networks:
+      - elite-mining-network
 
+  # =============================================================================
+  # REVERSE PROXY (Optional - controlled by ENV_MODE)
+  # =============================================================================
+  traefik:
+    image: traefik:v3.1
+    container_name: elite-mining-traefik
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Dashboard
+    environment:
+      - ACME_EMAIL=${ACME_EMAIL}
+      - ELITE_MINING_DOMAIN=${ELITE_MINING_DOMAIN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+      - traefik_logs:/var/log/traefik
+      # Traefik configuration
+      - type: bind
+        source: ./traefik
+        target: /etc/traefik
+        read_only: true
+        bind:
+          create_host_path: true
+    command:
+      - --api.dashboard=true
+      - --api.insecure=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+    restart: unless-stopped
+    networks:
+      - elite-mining-network
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  elite-mining-network:
+    driver: bridge
+    name: elite-mining-network
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
 volumes:
+  # Database
   mongodb_data:
     driver: local
+    name: elite-mining-mongodb-data
   mongodb_config:
     driver: local
+    name: elite-mining-mongodb-config
+  
+  # Application
   mining_logs:
     driver: local
+    name: elite-mining-logs
+  
+  # Traefik (production)
+  traefik_letsencrypt:
+    driver: local
+    name: elite-mining-traefik-certs
+  traefik_logs:
+    driver: local
+    name: elite-mining-traefik-logs

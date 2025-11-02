@@ -13,20 +13,11 @@ module.exports = (env, argv) => {
       path: path.resolve(__dirname, 'dist'),
       clean: true,
     },
-    externals: {
-      // Exclude node_modules from bundle for Node.js applications
-      bufferutil: 'bufferutil',
-      'utf-8-validate': 'utf-8-validate',
-      'mongodb-client-encryption': 'mongodb-client-encryption',
-      'aws4': 'aws4',
-      'kerberos': 'kerberos',
-      '@mongodb-js/zstd': '@mongodb-js/zstd',
-      'snappy': 'snappy',
-      '@aws-sdk/credential-providers': '@aws-sdk/credential-providers',
-      'gcp-metadata': 'gcp-metadata',
-      'socks': 'socks',
-      'zeromq': 'zeromq',
-    },
+    // For Node.js applications, exclude most node_modules to avoid bundling issues
+    externals: [
+      /^[a-z\-0-9]+$/, // Exclude all npm packages
+      // Keep some specific includes if needed
+    ],
     resolve: {
       extensions: ['.js', '.json'],
     },
@@ -61,7 +52,7 @@ module.exports = (env, argv) => {
       errorDetails: true,
     },
     optimization: {
-      minimize: false, // Deaktiviert für Node.js-Apps und zur Fehlerbehebung
+      minimize: false, // Disabled for Node.js apps and debugging
     }
   };
 };

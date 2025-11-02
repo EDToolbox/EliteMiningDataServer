@@ -97,6 +97,13 @@ jobs:
     - name: Check code formatting
       run: npm run format:check
 
+    - name: Build application bundle
+      run: npm run build
+
+    - name: Analyze bundle size
+      if: matrix.node-version == '22.x'
+      run: npm run build:analyze
+
     - name: Security audit
       run: npm audit --audit-level=moderate
 

@@ -1,93 +1,93 @@
 # 📊 Dashboard Integration Guide - Monitoring Enhancement
 
-## Dashboard erfolgreich erweitert
+## Dashboard Successfully Extended
 
-Das Dashboard wurde umfassend für die neuen Monitoring-Funktionen angepasst 
-und bietet jetzt eine vollständige Übersicht über:
+The dashboard has been comprehensively adapted for the new monitoring functions 
+and now provides a complete overview of:
 
-### Neue Dashboard-Features
+### New Dashboard Features
 
-#### 1. Erweiterte Übersichtskarten
+#### 1. Enhanced Overview Cards
 
 - **System Health**: Status, Uptime, Memory, CPU + Health Status
 - **Performance**: Response Time, Error Rate, Requests/sec, Total Requests  
 - **Error Tracking**: Total Errors, Critical Errors, Unique Errors, 24h Trend
 - **Alerts**: Active Alerts, Highest Severity, Resolved Today, Weekly Trend
 
-#### 2. Neue Monitoring-Sektionen
+#### 2. New Monitoring Sections
 
-- **Active Alerts**: Live Alert-Display mit Acknowledge-Funktionen
-- **Performance Metrics**: Detaillierte Metriken mit Zeitbereich-Auswahl
+- **Active Alerts**: Live Alert Display with Acknowledge Functions
+- **Performance Metrics**: Detailed Metrics with Time Range Selection
 - **Enhanced Charts**: Response Time Trends, Error Distribution
 
-#### 3. Automatische Monitoring-Integration
+#### 3. Automatic Monitoring Integration
 
-- **Smart Fallback**: Automatischer Wechsel zwischen Enhanced- und Basic-Mode
-- **Real-time Updates**: Alle 30 Sekunden automatische Aktualisierung
-- **Progressive Enhancement**: Funktioniert mit und ohne Monitoring-Services
+- **Smart Fallback**: Automatic switching between Enhanced and Basic Mode
+- **Real-time Updates**: Automatic refresh every 30 seconds
+- **Progressive Enhancement**: Works with and without Monitoring Services
 
-## 🚀 Backend-Erweiterungen
+## 🚀 Backend Extensions
 
-### Neue API-Endpunkte (`routes/dashboard.js`)
+### New API Endpoints (`routes/dashboard.js`)
 
 ```javascript
 // Enhanced Monitoring Dashboard
-GET /api/monitoring/dashboard         // Vollständiges Dashboard mit allen Monitoring-Daten
-GET /api/monitoring/performance       // Performance-Metriken mit Zeitbereich
-GET /api/monitoring/errors           // Error-Statistiken mit Filterung
-GET /api/monitoring/alerts          // Active Alerts mit Management
-POST /api/monitoring/alerts/:id/acknowledge // Alert bestätigen
+GET /api/monitoring/dashboard         // Complete Dashboard with all Monitoring Data
+GET /api/monitoring/performance       // Performance Metrics with Time Range
+GET /api/monitoring/errors           // Error Statistics with Filtering
+GET /api/monitoring/alerts          // Active Alerts with Management
+POST /api/monitoring/alerts/:id/acknowledge // Acknowledge Alert
 
 // Enhanced Basic APIs
-GET /api/metrics?timeRange=1h        // Erweiterte Metriken mit Fallback
-GET /api/health                     // Enhanced Health mit Monitoring-Status
+GET /api/metrics?timeRange=1h        // Enhanced Metrics with Fallback
+GET /api/health                     // Enhanced Health with Monitoring Status
 ```
 
-### Monitoring-Service Integration
+### Monitoring Service Integration
 
 ```javascript
-// Automatische Initialisierung der Monitoring-Services
+// Automatic Initialization of Monitoring Services
 this.healthCheckService = new HealthCheckService();
 this.performanceMetricsService = new PerformanceMetricsService();
 this.errorTrackingService = new ErrorTrackingService();
 this.alertingSystem = new AlertingSystem();
 
-// Smart Fallback bei Service-Fehlern
+// Smart Fallback for Service Errors
 async getMonitoringDashboard() {
     try {
-        // Versuche Enhanced Monitoring
+        // Try Enhanced Monitoring
         const [health, performance, errors, alerts] = await Promise.all([...]);
         return enhancedData;
     } catch (error) {
-        // Fallback zu Basic Dashboard
+        // Fallback to Basic Dashboard
         return basicDashboardData;
     }
 }
 ```
 
-## 🎨 Frontend-Verbesserungen
+## 🎨 Frontend Improvements
 
-### HTML-Erweiterungen (`public/index.html`)
+### HTML Extensions (`public/index.html`)
 
-#### Neue Übersichtskarten:
+#### New Overview Cards:
 ```html
-<!-- 4 erweiterte Karten statt 1 -->
+<!-- 4 enhanced cards instead of 1 -->
 <div class="card"> <!-- System Health + Health Status -->
-<div class="card"> <!-- Performance Metriken -->
+<div class="card"> <!-- Performance Metrics -->
 <div class="card"> <!-- Error Tracking -->
 <div class="card"> <!-- Alert Management -->
 ```
 
-#### Neue Monitoring-Sektionen:
+#### New Monitoring Sections:
 ```html
-<!-- Active Alerts mit Real-time Updates -->
+<!-- Active Alerts with Real-time Updates -->
 <section class="alerts-section">
     <div class="alerts-container">
         <!-- Dynamic Alert Rendering -->
     </div>
 </section>
 
-<!-- Performance Metrics mit Zeitbereich-Auswahl -->
+<!-- Performance Metrics with Time Range Selection -->
 <section class="performance-section">
     <select id="metricsTimeRange">
         <option value="1h">Last Hour</option>
@@ -98,9 +98,10 @@ async getMonitoringDashboard() {
 </section>
 ```
 
-### JavaScript-Enhancements (`public/js/dashboard.js`)
+### JavaScript Enhancements (`public/js/dashboard.js`)
 
-#### Smart Monitoring Detection:
+#### Smart Monitoring Detection
+
 ```javascript
 async loadMonitoringData() {
     try {
@@ -118,9 +119,10 @@ async loadMonitoringData() {
 }
 ```
 
-#### Real-time Alert Management:
+#### Real-time Alert Management
+
 ```javascript
-// Alert Rendering mit Acknowledge-Funktionen
+// Alert Rendering with Acknowledge Functions
 renderActiveAlerts(alerts) {
     container.innerHTML = alerts.map(alert => `
         <div class="alert-item ${alert.severity}">
@@ -131,7 +133,7 @@ renderActiveAlerts(alerts) {
     `).join('');
 }
 
-// Test Alert Funktionalität
+// Test Alert Functionality
 async testAlert() {
     const response = await fetch('/api/monitoring/alerts/test', {
         method: 'POST'
@@ -139,9 +141,10 @@ async testAlert() {
 }
 ```
 
-#### Performance Metrics Display:
+#### Performance Metrics Display
+
 ```javascript
-// Enhanced Metrics mit Smart Updates
+// Enhanced Metrics with Smart Updates
 updatePerformanceDisplay(performance) {
     document.getElementById('totalRequests').textContent = summary.totalRequests;
     document.getElementById('requestsPerSecond').textContent = 
@@ -151,9 +154,10 @@ updatePerformanceDisplay(performance) {
 }
 ```
 
-### CSS-Styling (`public/css/dashboard.css`)
+### CSS Styling (`public/css/dashboard.css`)
 
-#### Alert-System Styling:
+#### Alert System Styling
+
 ```css
 .alert-item.critical {
     border-left-color: var(--critical-color);
@@ -166,7 +170,8 @@ updatePerformanceDisplay(performance) {
 }
 ```
 
-#### Enhanced Buttons:
+#### Enhanced Buttons
+
 ```css
 .btn-refresh, .btn-test {
     background: var(--primary-color);
@@ -179,7 +184,8 @@ updatePerformanceDisplay(performance) {
 }
 ```
 
-#### Performance Metrics Grid:
+#### Performance Metrics Grid
+
 ```css
 .metrics-grid {
     display: grid;
@@ -199,72 +205,77 @@ updatePerformanceDisplay(performance) {
 ### 1. Dashboard Route Integration
 
 ```javascript
-// In deiner main app.js
+// In your main app.js
 const createDashboardRoutes = require('./routes/dashboard');
 
-// Dashboard mit Monitoring-Services initialisieren
+// Initialize Dashboard with Monitoring Services
 const dashboardRoutes = createDashboardRoutes(server);
 app.use('/dashboard', dashboardRoutes);
 ```
 
-### 2. Monitoring-Services Optional
+### 2. Optional Monitoring Services
 
 ```javascript
-// Dashboard funktioniert mit oder ohne Monitoring-Services
-// Bei verfügbaren Services: Enhanced Experience
-// Ohne Services: Graceful Fallback zu Basic Dashboard
+// Dashboard works with or without Monitoring Services
+// With available Services: Enhanced Experience
+// Without Services: Graceful Fallback to Basic Dashboard
 ```
 
 ### 3. Static File Serving
 
 ```javascript
-// Dashboard served automatisch die erweiterten Frontend-Files
+// Dashboard automatically serves the enhanced Frontend Files
 app.use('/dashboard', express.static(path.join(__dirname, 'public')));
 ```
 
-## 📊 Features im Detail
+## 📊 Features in Detail
 
 ### 🎯 Smart Monitoring Detection
-- **Automatic Fallback**: Dashboard erkennt automatisch verfügbare Monitoring-Services
-- **Progressive Enhancement**: Erweiterte Features nur wenn Monitoring aktiv
-- **Graceful Degradation**: Vollständige Funktionalität auch ohne Monitoring
+
+- **Automatic Fallback**: Dashboard automatically detects available Monitoring Services
+- **Progressive Enhancement**: Enhanced features only when Monitoring is active
+- **Graceful Degradation**: Full functionality even without Monitoring Services
 
 ### ⚡ Real-time Updates
-- **WebSocket Integration**: Live-Updates für alle Metriken
-- **Periodic Refresh**: Automatische Aktualisierung alle 30 Sekunden
-- **Manual Refresh**: Refresh-Buttons für sofortige Updates
+
+- **WebSocket Integration**: Live updates for all metrics
+- **Periodic Refresh**: Automatic refresh every 30 seconds
+- **Manual Refresh**: Refresh buttons for immediate updates
 
 ### 🔔 Alert Management
-- **Visual Alerts**: Farbkodierte Alerts nach Severity-Level
-- **Interactive Management**: Acknowledge-Buttons für Alert-Handling
-- **Test Functionality**: Test-Alert-Buttons für Debugging
+
+- **Visual Alerts**: Color-coded alerts by severity level
+- **Interactive Management**: Acknowledge buttons for alert handling
+- **Test Functionality**: Test alert buttons for debugging
 
 ### 📈 Enhanced Charts
-- **Response Time Trends**: Live-Charts für Response-Zeit-Entwicklung
-- **Error Distribution**: Pie-Charts für Error-Typ-Verteilung
-- **Performance Metrics**: Trend-Linien für System-Performance
+
+- **Response Time Trends**: Live charts for response time development
+- **Error Distribution**: Pie charts for error type distribution
+- **Performance Metrics**: Trend lines for system performance
 
 ### 📱 Mobile Responsive
-- **Responsive Grid**: Automatische Anpassung für verschiedene Bildschirmgrößen
-- **Touch-Friendly**: Optimierte Button-Größen für Touch-Interfaces
-- **Collapsed Layout**: Saubere mobile Darstellung
 
-## Einsatzbereit
+- **Responsive Grid**: Automatic adaptation for different screen sizes
+- **Touch-Friendly**: Optimized button sizes for touch interfaces
+- **Collapsed Layout**: Clean mobile representation
 
-Das erweiterte Dashboard ist **vollständig implementiert** und bietet:
+## Ready to Use
 
-- **Smart Integration** - Automatische Erkennung der Monitoring-Services  
-- **Enhanced UI** - 4 neue Übersichtskarten mit detaillierten Metriken  
-- **Real-time Alerts** - Live Alert-Display mit Management-Funktionen  
-- **Performance Tracking** - Detaillierte Performance-Metriken mit Trends  
-- **Responsive Design** - Mobile-optimierte Darstellung  
-- **Graceful Fallback** - Funktioniert perfekt auch ohne Monitoring-Services  
+The enhanced dashboard is **fully implemented** and offers:
 
-### Zugriff
+- **Smart Integration** - Automatic detection of Monitoring Services
+- **Enhanced UI** - 4 new overview cards with detailed metrics
+- **Real-time Alerts** - Live alert display with management functions
+- **Performance Tracking** - Detailed performance metrics with trends
+- **Responsive Design** - Mobile-optimized display
+- **Graceful Fallback** - Works perfectly even without Monitoring Services
+
+### Access
 
 - **Dashboard**: `http://localhost:3000/dashboard`
 - **Enhanced API**: `http://localhost:3000/dashboard/api/monitoring/dashboard`
 - **Alert Management**: `http://localhost:3000/dashboard/api/monitoring/alerts`
 
-Das Dashboard ist **sofort einsatzbereit** und bietet eine professionelle 
-Monitoring-Oberfläche!
+The dashboard is **immediately ready for use** and provides a professional
+monitoring interface!

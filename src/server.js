@@ -8,6 +8,9 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 
 const logger = require('./services/logger');
+const session = require('express-session');
+const passport = require('passport');
+const MongoStore = require('connect-mongo');
 const MongoService = require('./services/mongoService');
 const MarketDataService = require('./services/marketDataService');
 const StatisticsService = require('./services/statisticsService');
@@ -106,7 +109,27 @@ class Server {
     // Body parsing with larger limits for mining data
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+    
+    // Session support (used for OAuth flows)
+    const sessionSecret = process.env.SESSION_SECRET || 'change-me-in-production';
+    this.app.use(
+      session({
+        secret: sessionSecret,
+        resave: false,
+        saveUninitialized: false,
+        cookie: { secure: process.env.NODE_ENV === 'production' },
+        store: MongoStore.create({
+          mongoUrl:
+            process.env.MONGODB_URI || 'mongodb://localhost:27017/elite_mining',
+          dbName: process.env.MONGODB_DB_NAME || 'elite_mining',
+          collectionName: 'sessions',
+        }),
+      })
+    );
 
+    // Initialize passport
+    this.app.use(passport.initialize());
+    this.app.use(passport.session());
     // Add request timing and enhanced logging
     this.app.use((req, res, next) => {
       req.startTime = Date.now();
@@ -234,6 +257,14 @@ class Server {
     this.app.use('/api/systems', systemRoutes);
     this.app.use('/api/commodities', commodityRoutes);
     this.app.use('/api/status', statusRoutes);
+
+    // Auth routes (OAuth)
+    try {
+      const authRoutes = require('./routes/auth');
+      this.app.use('/auth', authRoutes);
+    } catch (error) {
+      logger.warn('Auth routes not available:', error.message);
+    }
 
     // Add new optimized routes if they exist
     try {

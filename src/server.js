@@ -274,6 +274,14 @@ class Server {
       logger.warn('Optional routes not available:', error.message);
     }
 
+    // User routes (requires authentication)
+    try {
+      const userRoutes = require('./routes/user');
+      this.app.use('/api/user', userRoutes);
+    } catch (error) {
+      logger.warn('User routes not available:', error.message);
+    }
+
     // 404 handler
     this.app.use('*', (req, res) => {
       res.status(404).json({ error: 'Endpoint not found' });

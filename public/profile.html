@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elite Mining Profile</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1><i class="fas fa-user-astronaut"></i> Mein Elite Dangerous Profil</h1>
+            <nav>
+                <a href="/index.html"><i class="fas fa-home"></i> Übersicht</a>
+                <a href="/profile.html"><i class="fas fa-user"></i> Profil</a>
+            </nav>
+        </div>
+    </header>
+    <main class="main">
+        <div class="container">
+            <section class="profile-section">
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-id-badge"></i> Charakter & Schiffe</h3>
+                    </div>
+                    <div class="card-content" id="profileContent">
+                        <!-- Charakterdaten und Schiffe werden hier geladen -->
+                    </div>
+                </div>
+            </section>
+            <section class="reports-section">
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-gem"></i> Meine Mining Reports</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="table-container">
+                            <table class="data-table" id="userMiningReports">
+                                <thead>
+                                    <tr>
+                                        <th>Datum</th>
+                                        <th>System</th>
+                                        <th>Hotspot</th>
+                                        <th>Schiff</th>
+                                        <th>Ertrag</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Reports werden per JS geladen -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section class="links-section">
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-link"></i> Verknüpfungen</h3>
+                    </div>
+                    <div class="card-content">
+                        <a href="#" class="btn-oauth steam"><i class="fab fa-steam"></i> Steam verbinden</a>
+                        <a href="#" class="btn-oauth discord"><i class="fab fa-discord"></i> Discord verbinden</a>
+                        <a href="#" class="btn-oauth github"><i class="fab fa-github"></i> Github verbinden</a>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+    <script src="/js/profile.js"></script>
+</body>
+</html>
